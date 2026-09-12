@@ -1,10 +1,17 @@
-// Paste the config object from Firebase Console → Project settings → Your apps → SDK setup.
-// See README.md for the exact steps.
-export const firebaseConfig = {
-  apiKey: "PASTE_ME",
-  authDomain: "PASTE_ME",
-  projectId: "PASTE_ME",
-  storageBucket: "PASTE_ME",
-  messagingSenderId: "PASTE_ME",
-  appId: "PASTE_ME",
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCJx-agwLNQp8ssqYbpaGqGAQkRTquvTyc",
+  authDomain: "trackers-activecanvas.firebaseapp.com",
+  projectId: "trackers-activecanvas",
+  storageBucket: "trackers-activecanvas.firebasestorage.app",
+  messagingSenderId: "643573553627",
+  appId: "1:643573553627:web:e74eefdd349d97d4faeffe"
 };
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
