@@ -22,14 +22,14 @@ A working prototype: girls log income/expenses/savings from any browser (phone o
    - Add one document per girl. Use **Auto-ID**, and give each document these fields: `name` (string), `pin` (string, e.g. `"1234"`), `cohort` (string, e.g. `"Cohort A"`).
    - Repeat for all ~20-25 girls. (Tedious once, but it's the only manual step — after this, everything happens through the app.)
 
-## Part 2 — Put it online with GitHub Pages
+## Part 2 — It's already online with GitHub Pages
 
-This folder is already a git repo. Once you (or Claude, with your go-ahead) push it to a GitHub repository and turn on Pages for it:
+Repo: [github.com/abhijithgiridhar/active-canvas-tracker](https://github.com/abhijithgiridhar/active-canvas-tracker)
 
-- Girl-facing link: `https://<your-github-username>.github.io/<repo-name>/`
-- Org dashboard: `https://<your-github-username>.github.io/<repo-name>/admin.html` — keep this one internal to the org team.
+- Girl-facing link: **https://abhijithgiridhar.github.io/active-canvas-tracker/**
+- Org dashboard: **https://abhijithgiridhar.github.io/active-canvas-tracker/admin.html** — keep this one internal to the org team.
 
-**To publish/update it:** commit your changes, then `git push`. GitHub Pages rebuilds automatically within a minute or two of every push — no separate deploy step. If Pages isn't turned on yet for the repo, go to the repo's **Settings → Pages** and set the source to the `main` branch, root folder.
+**To publish updates:** commit your changes, then `git push`. GitHub Pages rebuilds automatically within a minute or two of every push — no separate deploy step.
 
 Note: GitHub Pages serves the repo publicly (a private repo needs GitHub Pro/Team/Enterprise for Pages). Since `firebase-config.js` only contains a public client-side key — the same one visible in any Firebase web app's page source — this doesn't expose anything beyond what `firestore.rules` already governs.
 
