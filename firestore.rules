@@ -3,10 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Roster: readable so the login screen can list names + check PINs.
-    // Written only from the Firebase console (add girls there), not from the app.
+    // Writable so the org dashboard's bulk-upload tool can add girls from
+    // an Excel/CSV file — same pilot-grade trust model as entries below.
     match /girls/{girlId} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if true;
     }
 
     // Ledger entries: open read/write. There is no login system beyond a

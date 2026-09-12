@@ -78,6 +78,59 @@ export async function removeEntry(entryId) {
   return deleteDoc(doc(db, 'entries', entryId));
 }
 
+// ---------------- Roster bulk upload ----------------
+// Reads an uploaded .xlsx/.csv File and returns { rows, errors } — rows are
+// { name, pin, cohort } ready to write, errors are 1-indexed row problems.
+// Accepts header variants: Name/Girl Name, PIN/Pin Code, Cohort/Batch (case-insensitive).
+export async function parseRosterFile(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+  const headerRow = aoa[0] || [];
+  const norm = s => String(s || '').trim().toLowerCase();
+  const findCol = candidates => headerRow.findIndex(h => candidates.includes(norm(h)));
+  const nameCol = findCol(['name', 'girl name', 'student name']);
+  const pinCol = findCol(['pin', 'pin code', 'password']);
+  const cohortCol = findCol(['cohort', 'batch', 'group']);
+
+  const rows = [];
+  const errors = [];
+  if (nameCol === -1 || pinCol === -1) {
+    errors.push('Could not find "Name" and "PIN" columns — check the header row matches the template.');
+    return { rows, errors };
+  }
+
+  aoa.slice(1).forEach((line, i) => {
+    const rowNum = i + 2;
+    const name = String(line[nameCol] || '').trim();
+    const pin = String(line[pinCol] || '').trim();
+    const cohort = cohortCol !== -1 ? String(line[cohortCol] || '').trim() : '';
+    if (!name && !pin) return; // blank row
+    if (!name) { errors.push(`Row ${rowNum}: missing name.`); return; }
+    if (!/^\d{4,6}$/.test(pin)) { errors.push(`Row ${rowNum} (${name}): PIN must be 4-6 digits.`); return; }
+    rows.push({ name, pin, cohort });
+  });
+  return { rows, errors };
+}
+
+export async function addGirlsBulk(rows) {
+  const results = [];
+  for (const r of rows) {
+    const ref = await addDoc(collection(db, 'girls'), { name: r.name, pin: r.pin, cohort: r.cohort || '' });
+    results.push({ id: ref.id, ...r });
+  }
+  return results;
+}
+
+export function downloadRosterTemplate() {
+  const rows = [['Name', 'PIN', 'Cohort'], ['e.g. Aarthi K', '1234', 'Cohort A']];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Roster');
+  XLSX.writeFile(wb, 'roster_template.xlsx');
+}
+
 // ---------------- Aggregation ----------------
 export function summarizeByMonth(entries) {
   const byMonth = {};

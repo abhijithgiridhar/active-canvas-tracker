@@ -11,12 +11,12 @@
 <div class="wrap-wide" id="app"></div>
 
 <script type="module">
-import { fetchGirls, fetchEntries, CATEGORIES, money, monthKey, monthLabel, summarizeByMonth, totalsFor, exportOrgExcel } from './shared.js';
+import { fetchGirls, fetchEntries, CATEGORIES, money, monthKey, monthLabel, summarizeByMonth, totalsFor, exportOrgExcel, parseRosterFile, addGirlsBulk, downloadRosterTemplate } from './shared.js';
 
 // Change this to something only the org team knows before sharing the link.
 const ADMIN_PASSWORD = 'CHANGE_ME_2026';
 
-let STATE = { authed: false, girls: [], entries: [], month: monthKey(new Date()) };
+let STATE = { authed: false, girls: [], entries: [], month: monthKey(new Date()), roster: null, rosterBusy: false, rosterResult: '' };
 
 function render() {
   document.getElementById('app').innerHTML = STATE.authed ? viewDashboard() : viewLogin();
@@ -66,6 +66,33 @@ function wire() {
   if (monthSel) monthSel.onchange = () => { STATE.month = monthSel.value; render(); };
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) exportBtn.onclick = () => exportOrgExcel(STATE.girls, STATE.entries);
+
+  const templateBtn = document.getElementById('templateBtn');
+  if (templateBtn) templateBtn.onclick = () => downloadRosterTemplate();
+
+  const rosterFile = document.getElementById('rosterFile');
+  if (rosterFile) rosterFile.onchange = async () => {
+    const file = rosterFile.files[0];
+    if (!file) return;
+    STATE.rosterResult = '';
+    STATE.roster = await parseRosterFile(file);
+    render();
+  };
+
+  const confirmRosterBtn = document.getElementById('confirmRosterBtn');
+  if (confirmRosterBtn) confirmRosterBtn.onclick = async () => {
+    STATE.rosterBusy = true;
+    render();
+    const existingNames = new Set(STATE.girls.map(g => g.name.trim().toLowerCase()));
+    const toAdd = STATE.roster.rows.filter(r => !existingNames.has(r.name.trim().toLowerCase()));
+    const skipped = STATE.roster.rows.length - toAdd.length;
+    await addGirlsBulk(toAdd);
+    STATE.girls = await fetchGirls();
+    STATE.roster = null;
+    STATE.rosterBusy = false;
+    STATE.rosterResult = `Added ${toAdd.length} girls.` + (skipped ? ` Skipped ${skipped} already on the roster (matched by name).` : '');
+    render();
+  };
 }
 
 async function loadData() {
@@ -116,6 +143,37 @@ function viewDashboard() {
         <button class="btn btn-sm" id="logoutBtn">Log out</button>
       </div>
     </header>
+
+    <div class="section">
+      <div class="row between" style="margin-bottom:14px;">
+        <h2 style="margin:0;">Roster</h2>
+        <span class="small muted">${STATE.girls.length} girls added</span>
+      </div>
+      <div class="row gap12 wrap-flex" style="align-items:flex-end;">
+        <button class="btn btn-sm" id="templateBtn">Download template (.xlsx)</button>
+        <div class="field" style="margin-bottom:0; max-width:320px;">
+          <label>Upload filled-in roster</label>
+          <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv">
+        </div>
+      </div>
+      ${STATE.roster ? `
+        <div style="margin-top:16px;">
+          ${STATE.roster.errors.length ? `
+            <p class="small" style="color:#B00000; margin-bottom:8px;">${STATE.roster.errors.join('<br>')}</p>
+          ` : ''}
+          ${STATE.roster.rows.length ? `
+            <div class="table-scroll" style="margin-bottom:12px;">
+              <table>
+                <thead><tr><th>Name</th><th>PIN</th><th>Cohort</th></tr></thead>
+                <tbody>${STATE.roster.rows.map(r => `<tr><td>${r.name}</td><td class="mono">${r.pin}</td><td class="muted">${r.cohort || '—'}</td></tr>`).join('')}</tbody>
+              </table>
+            </div>
+            <button class="btn btn-solid" id="confirmRosterBtn" ${STATE.rosterBusy ? 'disabled' : ''}>${STATE.rosterBusy ? 'Adding…' : `Add ${STATE.roster.rows.length} girls to roster`}</button>
+          ` : ''}
+        </div>
+      ` : ''}
+      ${STATE.rosterResult ? `<p class="small" style="margin-top:10px;">${STATE.rosterResult}</p>` : ''}
+    </div>
 
     <div class="stat-grid">
       <div class="stat"><div class="lbl">Girls tracking</div><div class="val mono">${active} / ${perGirl.length}</div></div>

@@ -17,10 +17,11 @@ A working prototype: girls log income/expenses/savings from any browser (phone o
 3. Once created, go to the **Rules** tab of Firestore and replace the contents with everything in `firestore.rules` from this folder. Click **Publish**.
 4. Back in the project overview page, click the **`</>`** (web) icon to register a new web app. Name it anything. You don't need Firebase Hosting at this step — skip it if offered.
 5. Firebase shows you a `firebaseConfig` object. Copy the whole thing and paste its values into `firebase-config.js` in this folder, replacing the `"PASTE_ME"` placeholders.
-6. Still in the Firebase Console, go to **Firestore Database → Data** and create your roster by hand:
-   - Click **Start collection** → collection ID: `girls`.
-   - Add one document per girl. Use **Auto-ID**, and give each document these fields: `name` (string), `pin` (string, e.g. `"1234"`), `cohort` (string, e.g. `"Cohort A"`).
-   - Repeat for all ~20-25 girls. (Tedious once, but it's the only manual step — after this, everything happens through the app.)
+6. Add the girls' roster — no manual document creation needed:
+   - Open `admin.html`, log in with the admin password.
+   - Click **Download template (.xlsx)** — fill in one row per girl: Name, PIN (4-6 digits), Cohort.
+   - Click **Upload filled-in roster**, pick that file. It shows a preview and flags anything malformed (missing name, bad PIN) before touching the database.
+   - Click **Add N girls to roster** — done. Uploading the same file twice safely skips names already added.
 
 ## Part 2 — It's already online with GitHub Pages
 
@@ -48,6 +49,6 @@ Both "Download my Excel" (girl) and "Download full Excel" (org) generate a real 
 
 ## Security notes — read before wider rollout
 - There's no real login system: a girl is identified by picking her name and typing a PIN that's stored in plain text in Firestore and checked in the browser. This is enough to keep entries attributed to the right person in a small, trusted pilot — it is **not** protection against someone deliberately trying to see or edit another girl's data.
-- The current `firestore.rules` allow anyone with the app's Firebase config (visible in the page source, unavoidable for a project like this) to read and write the `entries` collection. That's necessary for the app to work without a real sign-in system, but means treat this as a **pilot with a known, trusted group**, not a public-facing product.
+- The current `firestore.rules` allow anyone with the app's Firebase config (visible in the page source, unavoidable for a project like this) to read and write both the `entries` and `girls` collections — the latter is what lets the admin dashboard's roster upload work without a backend. That's necessary for the app to work without a real sign-in system, but means treat this as a **pilot with a known, trusted group**, not a public-facing product.
 - Before scaling beyond a pilot, the next step up is Firebase Authentication (e.g. phone-number sign-in) with rules that check `request.auth.uid` — ask a developer to add this when you're ready; the data model here doesn't need to change, only the rules and login screen would.
 - Amounts and names are the only personal data stored — no addresses, IDs, or documents. Still, limit who has the admin password and the Firebase console access.
