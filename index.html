@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Tracker</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script type="module">
+import { fetchGirls, fetchEntries, addEntry, removeEntry, CATEGORIES, catByNum, BUCKET_LABEL, money, monthKey, monthLabel, summarizeByMonth, totalsFor, exportGirlExcel } from './shared.js';
+
+let STATE = { view: 'login', girls: [], girl: null, entries: [], error: '' };
+
+async function boot() {
+  try {
+    const saved = sessionStorage.getItem('mt_girl');
+    STATE.girls = await fetchGirls();
+    if (saved) {
+      STATE.girl = JSON.parse(saved);
+      STATE.view = 'ledger';
+      STATE.entries = await fetchEntries(STATE.girl.id);
+    } else {
+      STATE.view = 'login';
+    }
+    render();
+  } catch (err) {
+    document.getElementById('app').innerHTML = `
+      <div class="center-card">
+        <h1 style="font-size:18px; font-weight:700; margin-bottom:10px;">Can't connect</h1>
+        <p class="small muted">This usually means <code>firebase-config.js</code> still has placeholder values, or the Firestore rules haven't been published yet. See README.md.</p>
+        <p class="small" style="margin-top:12px; color:#B00000;">${err.message || err}</p>
+      </div>`;
+  }
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = STATE.view === 'login' ? viewLogin() : viewLedger();
+  wire();
+}
+
+function viewLogin() {
+  const options = STATE.girls.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+  return `
+    <div class="center-card">
+      <h1 style="font-size:20px; font-weight:700; margin-bottom:4px;">Money Tracker</h1>
+      <p class="muted small" style="margin-bottom:24px;">Active Canvas — everyday income &amp; expense log</p>
+      <div class="section">
+        <div class="field">
+          <label>Your name</label>
+          <select id="loginGirl">
+            <option value="">Select your name</option>
+            ${options}
+          </select>
+        </div>
+        <div class="field">
+          <label>PIN</label>
+          <input type="password" id="loginPin" inputmode="numeric" maxlength="4" placeholder="4 digits">
+        </div>
+        <p class="small" style="color:#B00000; margin-bottom:12px;" id="loginError">${STATE.error || ''}</p>
+        <button class="btn btn-solid btn-block" id="loginBtn">Enter</button>
+      </div>
+      <p class="small muted">No PIN yet? Ask your program officer to add you.</p>
+    </div>
+  `;
+}
+
+function currentMonth() { return monthKey(new Date()); }
+
+function viewLedger() {
+  const byMonth = summarizeByMonth(STATE.entries);
+  const mk = currentMonth();
+  const t = totalsFor(byMonth[mk] || { income: 0, fixed: 0, variable: 0, savings: 0 });
+  const recent = STATE.entries.slice(0, 25);
+
+  const grouped = { income: [], fixed: [], variable: [], savings: [] };
+  CATEGORIES.forEach(c => grouped[c.bucket].push(c));
+  const optGroup = (label, list) => `<optgroup label="${label}">${list.map(c => `<option value="${c.num}">${c.num}. ${c.label}</option>`).join('')}</optgroup>`;
+
+  return `
+    <header class="masthead">
+      <div>
+        <h1>Money Tracker</h1>
+        <p class="tag">${STATE.girl.name}</p>
+      </div>
+      <div class="row gap8">
+        <button class="btn btn-sm" id="exportBtn">Download my Excel</button>
+        <button class="btn btn-sm" id="logoutBtn">Exit</button>
+      </div>
+    </header>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="lbl">Income — ${monthLabel(mk)}</div><div class="val mono">${money(t.A)}</div></div>
+      <div class="stat"><div class="lbl">Expenses</div><div class="val mono">${money(t.E)}</div></div>
+      <div class="stat"><div class="lbl">Saved</div><div class="val mono">${money(t.D)}</div></div>
+      <div class="stat"><div class="lbl">Balance</div><div class="val mono">${money(t.G)}</div></div>
+    </div>
+
+    <div class="section">
+      <h2>Add an entry</h2>
+      <div class="field-row">
+        <div class="field">
+          <label>Category</label>
+          <select id="entryCat">
+            <option value="">Select…</option>
+            ${optGroup('Income', grouped.income)}
+            ${optGroup('Fixed Expense', grouped.fixed)}
+            ${optGroup('Variable Expense', grouped.variable)}
+            ${optGroup('Savings', grouped.savings)}
+          </select>
+        </div>
+        <div class="field" style="max-width:160px;">
+          <label>Amount (INR)</label>
+          <input type="number" id="entryAmount" min="0" step="1" placeholder="0">
+        </div>
+        <div class="field" style="max-width:170px;">
+          <label>Date</label>
+          <input type="date" id="entryDate" value="${new Date().toISOString().slice(0,10)}">
+        </div>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="entryNote" placeholder="e.g. Bus fare to college">
+      </div>
+      <p class="small" style="color:#B00000; margin-bottom:12px;" id="entryError"></p>
+      <button class="btn btn-solid" id="addBtn">Add entry</button>
+    </div>
+
+    <div class="section">
+      <div class="row between" style="margin-bottom:14px;">
+        <h2 style="margin:0;">Recent entries</h2>
+        <span class="small muted">${STATE.entries.length} total</span>
+      </div>
+      <div class="table-scroll">
+        ${recent.length ? `
+        <table>
+          <thead><tr><th>Date</th><th>Category</th><th>Type</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+          <tbody>
+            ${recent.map(e => {
+              const c = catByNum[e.categoryNum] || { label: e.categoryNum, bucket: 'variable' };
+              return `<tr>
+                <td class="mono">${e.date}</td>
+                <td>${c.label}</td>
+                <td><span class="tag-chip">${BUCKET_LABEL[c.bucket]}</span></td>
+                <td class="num mono">${money(e.amount)}</td>
+                <td class="muted">${e.note || ''}</td>
+                <td><button class="btn btn-sm" data-remove="${e.id}">Remove</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>` : `<div class="empty">No entries yet. Add your first one above.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function wire() {
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) loginBtn.onclick = doLogin;
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.onclick = () => { sessionStorage.removeItem('mt_girl'); STATE = { view: 'login', girls: STATE.girls, girl: null, entries: [] }; render(); };
+
+  const addBtn = document.getElementById('addBtn');
+  if (addBtn) addBtn.onclick = doAdd;
+
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) exportBtn.onclick = () => exportGirlExcel(STATE.girl.name, STATE.entries);
+
+  document.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      await removeEntry(btn.dataset.remove);
+      STATE.entries = await fetchEntries(STATE.girl.id);
+      render();
+    };
+  });
+}
+
+async function doLogin() {
+  const girlId = document.getElementById('loginGirl').value;
+  const pin = document.getElementById('loginPin').value;
+  const girl = STATE.girls.find(g => g.id === girlId);
+  if (!girl || String(girl.pin) !== String(pin)) {
+    STATE.error = 'Name or PIN not recognized.';
+    render();
+    return;
+  }
+  STATE.error = '';
+  STATE.girl = { id: girl.id, name: girl.name };
+  sessionStorage.setItem('mt_girl', JSON.stringify(STATE.girl));
+  STATE.view = 'ledger';
+  STATE.entries = await fetchEntries(girl.id);
+  render();
+}
+
+async function doAdd() {
+  const categoryNum = Number(document.getElementById('entryCat').value);
+  const amount = Number(document.getElementById('entryAmount').value);
+  const date = document.getElementById('entryDate').value;
+  const note = document.getElementById('entryNote').value;
+  const errEl = document.getElementById('entryError');
+  if (!categoryNum) { errEl.textContent = 'Pick a category.'; return; }
+  if (!amount || amount <= 0) { errEl.textContent = 'Enter an amount greater than 0.'; return; }
+  if (!date) { errEl.textContent = 'Pick a date.'; return; }
+  errEl.textContent = '';
+  document.getElementById('addBtn').disabled = true;
+  await addEntry({ girlId: STATE.girl.id, categoryNum, amount, date, note });
+  STATE.entries = await fetchEntries(STATE.girl.id);
+  render();
+}
+
+boot();
+</script>
+</body>
+</html>

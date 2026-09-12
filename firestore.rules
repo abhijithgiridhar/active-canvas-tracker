@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Roster: readable so the login screen can list names + check PINs.
+    // Written only from the Firebase console (add girls there), not from the app.
+    match /girls/{girlId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Ledger entries: open read/write. There is no login system beyond a
+    // name+PIN pair checked in the browser, so this is pilot-grade security —
+    // fine for a trusted, known group of ~20 girls, not a public product.
+    // See README.md "Security notes" before rolling this out more widely.
+    match /entries/{entryId} {
+      allow read, write: if true;
+    }
+  }
+}
